@@ -1,0 +1,1 @@
+export const MONITOR_QUEUE_NAME = 'check-queue';
