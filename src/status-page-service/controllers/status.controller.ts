@@ -3,41 +3,60 @@ import ejs from 'ejs';
 import path from 'node:path';
 import { getSiteStatus } from '../services/status.service.js';
 import type { BadgeViewModel, StatusPageViewModel } from '../types/status.types.js';
+import { STATUS_COLORS, type StatusLevel } from '../lib/status-colors';
 
-// const 
+const UPTIME_THRESHOLD_OPERATIONAL = 99;
+const UPTIME_THRESHOLD_DEGRADED = 95;
 
 const STATUS_TEMPLATE_PATH = path.join(__dirname, '..', 'views', 'status.ejs'); // HTML-страница
 const BADGE_TEMPLATE_PATH = path.join(__dirname, '..', 'views', 'badge.ejs');
 
 type OutputType = 'html' | 'svg';
 
+/**
+ * Вычисление уровня по значению успешности.
+ * @param uptimePercent Знеачение успешности в процентах
+ * @returns Значение уровеня
+ */
+function convertToStatusLevel(uptimePercent: number): StatusLevel {
+  if (uptimePercent >= UPTIME_THRESHOLD_OPERATIONAL)
+  {
+    return 'operational';
+  }
+
+  if (uptimePercent >= UPTIME_THRESHOLD_DEGRADED)
+  {
+    return 'degraded';
+  }
+
+  return 'outage';
+}
+
+/**
+ * Словарь значений уровней.
+ */
+const STATUS_LABELS: Record<StatusLevel, string> = {
+  operational: 'Operational',
+  degraded: 'Degraded',
+  outage: 'Outage',
+};
+
+/**
+ * Извлечение типа ответа.
+ * @param raw Параметр.
+ * @returns Тип ответа.
+ */
 function parseOutputType(raw: unknown): OutputType {
   return raw === 'html' ? 'html' : 'svg'; // По умолчанию отправляем картинку
 }
 
-function uptimeColor(uptimePercent: number): string {
-  if (uptimePercent >= 99)
-  {
-    return '#4c1';
-  }
-
-  if (uptimePercent >= 95)
-  {
-    return '#dfb317';
-  }
-
-  return '#e05d44';
-}
-
-function statusLabelAndColor(uptimePercent: number): {
-  label: string;
-  color: string;
-} {
-  if (uptimePercent >= 99) return { label: 'Operational', color: '#4c1' };
-  if (uptimePercent >= 95) return { label: 'Degraded', color: '#dfb317' };
-  return { label: 'Outage', color: '#e05d44' };
-}
-
+/**
+ * Генерация модели для изображения статуса.
+ * @param label Текст левой части бейджа
+ * @param value Значение успешности
+ * @param color Цвет стаутса
+ * @returns Данные для рендеринга SVG-бейджа
+ */
 function buildBadgeViewModel(
   label: string,
   value: string,
@@ -57,30 +76,46 @@ function buildBadgeViewModel(
   };
 }
 
+/**
+ * Генерация бейджа.
+ * @param siteId Идентификатор сайта
+ * @returns Изображение бейджа
+ */
 async function renderSvg(siteId: string): Promise<string> {
   const status = await getSiteStatus(siteId);
   const value = `${status.uptimePercent.toFixed(1)}% uptime`;
-  const color = uptimeColor(status.uptimePercent);
+  const level = convertToStatusLevel(status.uptimePercent);
+  const color = STATUS_COLORS[level];
   const viewModel = buildBadgeViewModel('status', value, color);
 
   return ejs.renderFile(BADGE_TEMPLATE_PATH, viewModel, { async: true });
 }
 
+/**
+ * Генерация статуса в HTML.
+ * @param siteId Идентификатор сайта
+ * @returns HTML-страница
+ */
 async function renderHtml(siteId: string): Promise<string> {
   const status = await getSiteStatus(siteId);
-  const { label, color } = statusLabelAndColor(status.uptimePercent);
+  const level = convertToStatusLevel(status.uptimePercent);
+  const color = STATUS_COLORS[level];
+  const label = STATUS_LABELS[level];
 
   const viewModel: StatusPageViewModel = {
     ...status,
     statusLabel: label,
     statusColor: color,
-    // ссылка на тот же роут, но в формате SVG
-    badgeUrl: `/status/${encodeURIComponent(siteId)}?type=svg`,
+    badgeUrl: `/status/${encodeURIComponent(siteId)}?type=svg`, // ссылка на тот же роут, но в формате SVG
   };
 
   return ejs.renderFile(STATUS_TEMPLATE_PATH, viewModel, { async: true });
 }
 
+/**
+ * HTTP-контроллер статусов.
+ * @returns 
+ */
 export async function statusController(
   req: Request,
   res: Response,
@@ -95,6 +130,7 @@ export async function statusController(
       res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.status(200).send(svg);
+
       return;
     }
 
