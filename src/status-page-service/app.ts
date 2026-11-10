@@ -2,7 +2,6 @@ import path from 'node:path';
 import express from 'express';
 import pinoHttp from 'pino-http';
 import { logger } from './lib/logger.js';
-import { badgeRouter } from './routes/badge.route.js';
 import { statusRouter } from './routes/status.route.js';
 
 export function createApp(): express.Express {
@@ -27,8 +26,7 @@ export function createApp(): express.Express {
     res.status(200).json({ status: 'ok' });
   });
 
-  app.use('/badge', badgeRouter);
-  app.use('/status', statusRouter);
+  app.use('/', statusRouter);
 
   // Обработчик 404
   app.use((_req, res) => {

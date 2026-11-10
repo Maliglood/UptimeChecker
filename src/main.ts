@@ -38,7 +38,7 @@ async function bootstrap() {
 
   // Добавляем легаси на Express
   const legacyApp = createLegacyStatusApp();
-  app.use('/badge', legacyApp);
+  app.use('/status', legacyApp);
   const shutdownSignals: NodeJS.Signals[] = ['SIGTERM', 'SIGINT'];
   shutdownSignals.forEach((signal) => {
     process.once(signal, async () => {
