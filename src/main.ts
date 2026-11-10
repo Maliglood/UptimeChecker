@@ -4,6 +4,8 @@ import { Logger } from 'nestjs-pino';
 import pino from 'pino';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { createApp as createLegacyStatusApp } from './status-page-service/app';
+import { redis as legacyRedis } from './status-page-service/lib/redis';
 
 const bootstrapLogger = pino();
 
@@ -33,6 +35,17 @@ async function bootstrap() {
       transform: true,
     }),
   );
+
+  // Добавляем легаси на Express
+  const legacyApp = createLegacyStatusApp();
+  app.use('/badge', legacyApp);
+  const shutdownSignals: NodeJS.Signals[] = ['SIGTERM', 'SIGINT'];
+  shutdownSignals.forEach((signal) => {
+    process.once(signal, async () => {
+      await legacyRedis.quit().catch(() => {});
+    });
+  });
+
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
